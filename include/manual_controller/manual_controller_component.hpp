@@ -1,6 +1,5 @@
 #pragma once
 #include <iostream>
-#include <rclcpp/clock.hpp>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -8,10 +7,13 @@
 #include <vector>
 //ros2
 #include <geometry_msgs/msg/twist.hpp>
+#include <rclcpp/clock.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+
+#include "controller.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -26,8 +28,7 @@ public:
   : Node("manual_controller_node", name_space, options)
   {
     RCLCPP_INFO(this->get_logger(), "start manual_controller_node");
-    CMD_VEL_TOPIC =
-      param<std::string>("manual_controller.topic_name.cmd_vel", "manual/cmd_vel");
+    CMD_VEL_TOPIC = param<std::string>("manual_controller.topic_name.cmd_vel", "manual/cmd_vel");
     AUTO_CMD_VEL_TOPIC =
       param<std::string>("manual_controller.topic_name.auto_cmd_vel", "auto/cmd_vel");
     std::string JOY_TOPIC = param<std::string>("manual_controller.topic_name.joy", "/joy");
@@ -41,38 +42,42 @@ public:
     // subscriber
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
       JOY_TOPIC, rclcpp::QoS(10), [&](const sensor_msgs::msg::Joy::SharedPtr msg) {
+        controller_.update(*msg);
         geometry_msgs::msg::Twist cmd_vel;
-        cmd_vel.linear.x = msg->axes[axes_list_["LY"]] * MAX_VEL;
-        cmd_vel.linear.y = msg->axes[axes_list_["LX"]] * MAX_VEL;
-        cmd_vel.angular.z = msg->axes[axes_list_["RX"]] * MAX_ANGULAR;
-        if(msg->buttons[button_list_["A"]]){
+        double vel = MAX_VEL;
+        double angular = MAX_ANGULAR;
+        cmd_vel.linear.x = controller_.get_axis(Controller::Axis::LEFT_Y)* vel;
+        cmd_vel.linear.y = controller_.get_axis(Controller::Axis::LEFT_X)* vel;
+        cmd_vel.angular.z = controller_.get_axis(Controller::Axis::RIGHT_X)* angular;
+
+        if (controller_.get_key_down(Controller::Key::A)) {
           publish_switch(AUTO_CMD_VEL_TOPIC);
         }
-        if(msg->buttons[button_list_["B"]]){
+        if (controller_.get_key_down(Controller::Key::B)) {
           publish_switch(CMD_VEL_TOPIC);
         }
-        if(msg->buttons[button_list_["X"]]){
+        if (controller_.get_key_down(Controller::Key::X)) {
           ems(true);
         }
-        if(msg->buttons[button_list_["Y"]]){
+        if (controller_.get_key_down(Controller::Key::Y)) {
           ems(false);
         }
-        if(msg->buttons[button_list_["L1"]]){
-          cmd_vel.angular.z = MAX_ANGULAR;
+        if (controller_.get_key(Controller::Key::L1)) {
+          cmd_vel.angular.z = angular;
+        } else if (controller_.get_key(Controller::Key::R1)) {
+          cmd_vel.angular.z = -angular;
         }
-        else if(msg->buttons[button_list_["R1"]]){
-          cmd_vel.angular.z = -MAX_ANGULAR;
+        if (controller_.get_key(Controller::Key::L2)) {
+        } else {
+          if (!controller_.get_axis(Controller::Axis::LEFT_Y)) cmd_vel.linear.x = controller_.get_axis(Controller::Axis::UP_DOWN) * vel;
+          if (!controller_.get_axis(Controller::Axis::LEFT_X)) cmd_vel.linear.y = controller_.get_axis(Controller::Axis::LEFT_RIGHT) * vel;
         }
-        if(!msg->axes[axes_list_["LY"]])
-          cmd_vel.linear.x = msg->axes[axes_list_["UD"]] * MAX_VEL;
-        if(!msg->axes[axes_list_["LX"]])
-          cmd_vel.linear.y = msg->axes[axes_list_["LR"]] * MAX_VEL;
         cmd_vel_pub_->publish(cmd_vel);
       });
     // client
     ems_srv_ = this->create_client<std_srvs::srv::SetBool>("twist_bridge/ems");
-    while(!ems_srv_->wait_for_service(1s)){
-      if(!rclcpp::ok()){
+    while (!ems_srv_->wait_for_service(1s)) {
+      if (!rclcpp::ok()) {
         RCLCPP_ERROR(this->get_logger(), "Client interrupted while waiting for service");
         return;
       }
@@ -85,18 +90,7 @@ private:
   double MAX_ANGULAR;
   std::string AUTO_CMD_VEL_TOPIC;
   std::string CMD_VEL_TOPIC;
-  std::unordered_map<std::string, int> axes_list_ = {
-    {"LX", 0},
-    {"LY", 1},
-    {"RX", 2},
-    {"RY", 3},
-    {"LR", 4},//Left Right
-    {"UD", 5},//Up Down
-  };
-  std::unordered_map<std::string, int> button_list_ = {
-    {"X", 0},  {"A", 1},  {"B", 2},      {"Y", 3},     {"L1", 4},  {"R1", 5},
-    {"L2", 6}, {"R2", 7}, {"SELECT", 8}, {"START", 9}, {"L3", 10}, {"L4", 11},
-  };
+  Controller controller_;
   // publisher
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr switch_pub_;
@@ -106,6 +100,7 @@ private:
   rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr ems_srv_;
   // twists
   std::vector<geometry_msgs::msg::Twist> twists_;
+  bool push_button() {}
 
   void publish_switch(const std::string & name)
   {
@@ -118,9 +113,10 @@ private:
   {
     auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
     request->data = data;
-    auto result = ems_srv_->async_send_request(request,[&](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future) {
-      RCLCPP_INFO(this->get_logger(), "%s",future.get()->message.c_str());
-    });
+    auto result = ems_srv_->async_send_request(
+      request, [&](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future) {
+        RCLCPP_INFO(this->get_logger(), "%s", future.get()->message.c_str());
+      });
   }
 
   template <class T>
@@ -143,4 +139,13 @@ private:
     twist.angular.z = 0.0;
     return twist;
   }
+
+  // std::unordered_map<std::string, int> axes_list_ = {
+  //   {"LX", 0}, {"LY", 1}, {"RX", 2}, {"RY", 3}, {"LR", 4},  //Left Right
+  //   {"UD", 5},                                              //Up Down
+  // };
+  // std::unordered_map<std::string, int> button_list_ = {
+  //   {"X", 0},  {"A", 1},  {"B", 2},      {"Y", 3},     {"L1", 4},  {"R1", 5},
+  //   {"L2", 6}, {"R2", 7}, {"SELECT", 8}, {"START", 9}, {"L3", 10}, {"L4", 11},
+  // };
 };
