@@ -6,5 +6,5 @@ manual_controller_node:
         auto_cmd_vel: "auto/cmd_vel"
         joy: "/joy"
       max:
-        vel: 0.3 #[m/s]
+        vel: 0.7 #[m/s]
         angular: 1.0 #[rad/s]
