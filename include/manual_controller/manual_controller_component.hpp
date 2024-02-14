@@ -13,7 +13,8 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 
-#include "controller.hpp"
+#include "controller/controller.hpp"
+#include "controller/logi_xbox.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -34,6 +35,7 @@ public:
     std::string JOY_TOPIC = param<std::string>("manual_controller.topic_name.joy", "/joy");
     MAX_VEL = param<double>("manual_controller.max.vel", 0.5);
     MAX_ANGULAR = param<double>("manual_controller.max.angular", 0.2);
+    controller_ = std::make_shared<LogiXboxController>();
     // publisher
     cmd_vel_pub_ =
       this->create_publisher<geometry_msgs::msg::Twist>(CMD_VEL_TOPIC, rclcpp::QoS(10));
@@ -42,35 +44,36 @@ public:
     // subscriber
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
       JOY_TOPIC, rclcpp::QoS(10), [&](const sensor_msgs::msg::Joy::SharedPtr msg) {
-        controller_.update(*msg);
+        using CONTROLLER = Controller;
+        controller_->update(*msg);
         geometry_msgs::msg::Twist cmd_vel;
         double vel = MAX_VEL;
         double angular = MAX_ANGULAR;
-        cmd_vel.linear.x = controller_.get_axis(Controller::Axis::LEFT_Y)* vel;
-        cmd_vel.linear.y = controller_.get_axis(Controller::Axis::LEFT_X)* vel;
-        cmd_vel.angular.z = controller_.get_axis(Controller::Axis::RIGHT_X)* angular;
+        cmd_vel.linear.x = controller_->get_axis(CONTROLLER::Axis::LEFT_Y)* vel;
+        cmd_vel.linear.y = controller_->get_axis(CONTROLLER::Axis::LEFT_X)* vel;
+        cmd_vel.angular.z = controller_->get_axis(CONTROLLER::Axis::RIGHT_X)* angular;
 
-        if (controller_.get_key_down(Controller::Key::A)) {
+        if (controller_->get_key_down(CONTROLLER::Key::A)) {
           publish_switch(AUTO_CMD_VEL_TOPIC);
         }
-        if (controller_.get_key_down(Controller::Key::B)) {
+        if (controller_->get_key_down(CONTROLLER::Key::B)) {
           publish_switch(CMD_VEL_TOPIC);
         }
-        if (controller_.get_key_down(Controller::Key::X)) {
+        if (controller_->get_key_down(CONTROLLER::Key::X)) {
           ems(true);
         }
-        if (controller_.get_key_down(Controller::Key::Y)) {
+        if (controller_->get_key_down(CONTROLLER::Key::Y)) {
           ems(false);
         }
-        if (controller_.get_key(Controller::Key::L1)) {
+        if (controller_->get_key(CONTROLLER::Key::L1)) {
           cmd_vel.angular.z = angular;
-        } else if (controller_.get_key(Controller::Key::R1)) {
+        } else if (controller_->get_key(CONTROLLER::Key::R1)) {
           cmd_vel.angular.z = -angular;
         }
-        if (controller_.get_key(Controller::Key::L2)) {
+        if (controller_->get_key(CONTROLLER::Key::L2)) {
         } else {
-          if (!controller_.get_axis(Controller::Axis::LEFT_Y)) cmd_vel.linear.x = controller_.get_axis(Controller::Axis::UP_DOWN) * vel;
-          if (!controller_.get_axis(Controller::Axis::LEFT_X)) cmd_vel.linear.y = controller_.get_axis(Controller::Axis::LEFT_RIGHT) * vel;
+          if (!controller_->get_axis(CONTROLLER::Axis::LEFT_Y)) cmd_vel.linear.x = controller_->get_axis(CONTROLLER::Axis::UP_DOWN) * vel;
+          if (!controller_->get_axis(CONTROLLER::Axis::LEFT_X)) cmd_vel.linear.y = controller_->get_axis(CONTROLLER::Axis::LEFT_RIGHT) * vel;
         }
         cmd_vel_pub_->publish(cmd_vel);
       });
@@ -90,7 +93,8 @@ private:
   double MAX_ANGULAR;
   std::string AUTO_CMD_VEL_TOPIC;
   std::string CMD_VEL_TOPIC;
-  Controller controller_;
+  // Controller controller_;
+  std::shared_ptr<Controller> controller_;
   // publisher
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr switch_pub_;
