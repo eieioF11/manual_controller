@@ -15,6 +15,7 @@
 
 #include "controller/controller.hpp"
 #include "controller/logi_xbox.hpp"
+#include "controller/steamdeck.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -33,9 +34,23 @@ public:
     AUTO_CMD_VEL_TOPIC =
       param<std::string>("manual_controller.topic_name.auto_cmd_vel", "auto/cmd_vel");
     std::string JOY_TOPIC = param<std::string>("manual_controller.topic_name.joy", "/joy");
-    MAX_VEL = param<double>("manual_controller.max.vel", 0.5);
-    MAX_ANGULAR = param<double>("manual_controller.max.angular", 0.2);
-    controller_ = std::make_shared<LogiXboxController>();
+    std::string RESET_SERVICE = param<std::string>("manual_controller.service_name.reset", "/reset");
+    STEP_VEL = param<double>("manual_controller.step.vel", 0.1);
+    STEP_ANGULAR = param<double>("manual_controller.step.angular", 0.1);
+    MAX_VEL = param<double>("manual_controller.max.vel", 5.0);
+    MAX_ANGULAR = param<double>("manual_controller.max.angular", 2.0);
+    MIN_VEL = param<double>("manual_controller.min.vel", 0.5);
+    MIN_ANGULAR = param<double>("manual_controller.min.angular", 0.2);
+    double threshold = param<double>("manual_controller.trigger_threshold", 0.1);
+    std::string controller_type = param<std::string>("manual_controller.type", "logi_xbox");
+    if (controller_type == "logi_xbox")
+      controller_ = std::make_shared<LogiXboxController>(threshold);
+    else if (controller_type == "steamdeck")
+      controller_ = std::make_shared<SteamDeckController>(threshold);
+    else
+      controller_ = std::make_shared<LogiXboxController>(threshold);
+    vel_ = MIN_VEL;
+    angular_ = MIN_ANGULAR;
     // publisher
     cmd_vel_pub_ =
       this->create_publisher<geometry_msgs::msg::Twist>(CMD_VEL_TOPIC, rclcpp::QoS(10));
@@ -44,41 +59,53 @@ public:
     // subscriber
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
       JOY_TOPIC, rclcpp::QoS(10), [&](const sensor_msgs::msg::Joy::SharedPtr msg) {
-        using CONTROLLER = Controller;
         controller_->update(*msg);
         geometry_msgs::msg::Twist cmd_vel;
-        double vel = MAX_VEL;
-        double angular = MAX_ANGULAR;
-        cmd_vel.linear.x = controller_->get_axis(CONTROLLER::Axis::LEFT_Y)* vel;
-        cmd_vel.linear.y = controller_->get_axis(CONTROLLER::Axis::LEFT_X)* vel;
-        cmd_vel.angular.z = controller_->get_axis(CONTROLLER::Axis::RIGHT_X)* angular;
+        cmd_vel.linear.x = controller_->get_axis(Controller::Axis::LEFT_Y) * MAX_VEL;
+        cmd_vel.linear.y = controller_->get_axis(Controller::Axis::LEFT_X) * MAX_VEL;
+        cmd_vel.angular.z = controller_->get_axis(Controller::Axis::RIGHT_X) * MAX_ANGULAR;
 
-        if (controller_->get_key_down(CONTROLLER::Key::A)) {
+        if (controller_->get_key_down(Controller::Key::A)) {
           publish_switch(AUTO_CMD_VEL_TOPIC);
         }
-        if (controller_->get_key_down(CONTROLLER::Key::B)) {
+        if (controller_->get_key_down(Controller::Key::B)) {
           publish_switch(CMD_VEL_TOPIC);
         }
-        if (controller_->get_key_down(CONTROLLER::Key::X)) {
+        if (controller_->get_key_down(Controller::Key::X)) {
           ems(true);
         }
-        if (controller_->get_key_down(CONTROLLER::Key::Y)) {
+        if (controller_->get_key_down(Controller::Key::Y)) {
           ems(false);
         }
-        if (controller_->get_key(CONTROLLER::Key::L1)) {
-          cmd_vel.angular.z = angular;
-        } else if (controller_->get_key(CONTROLLER::Key::R1)) {
-          cmd_vel.angular.z = -angular;
+        if (controller_->get_key_down(Controller::Key::START)) {
+          reset();
         }
-        if (controller_->get_key(CONTROLLER::Key::L2)) {
+        if (controller_->get_key(Controller::Key::L1)) {
+          cmd_vel.angular.z = angular_;
+        } else if (controller_->get_key(Controller::Key::R1)) {
+          cmd_vel.angular.z = -angular_;
+        }
+        if (controller_->get_key(Controller::Key::L2)) {
+          if (controller_->get_key_down(Controller::Key::UP))
+            vel_+=STEP_VEL;
+          else if (controller_->get_key_down(Controller::Key::DOWN))
+            vel_-=STEP_VEL;
+          else if (controller_->get_key_down(Controller::Key::LEFT))
+            angular_+=STEP_ANGULAR;
+          if (controller_->get_key_down(Controller::Key::RIGHT))
+            angular_-=STEP_ANGULAR;
+          RCLCPP_INFO(this->get_logger(), "vel: %f angular: %f", vel_, angular_);
         } else {
-          if (!controller_->get_axis(CONTROLLER::Axis::LEFT_Y)) cmd_vel.linear.x = controller_->get_axis(CONTROLLER::Axis::UP_DOWN) * vel;
-          if (!controller_->get_axis(CONTROLLER::Axis::LEFT_X)) cmd_vel.linear.y = controller_->get_axis(CONTROLLER::Axis::LEFT_RIGHT) * vel;
+          if (!controller_->get_axis(Controller::Axis::LEFT_Y))
+            cmd_vel.linear.x = controller_->get_axis(Controller::Axis::UP_DOWN) * vel_;
+          if (!controller_->get_axis(Controller::Axis::LEFT_X))
+            cmd_vel.linear.y = controller_->get_axis(Controller::Axis::LEFT_RIGHT) * vel_;
         }
         cmd_vel_pub_->publish(cmd_vel);
       });
     // client
     ems_srv_ = this->create_client<std_srvs::srv::SetBool>("twist_bridge/ems");
+    reset_srv_ = this->create_client<std_srvs::srv::SetBool>(RESET_SERVICE);
     while (!ems_srv_->wait_for_service(1s)) {
       if (!rclcpp::ok()) {
         RCLCPP_ERROR(this->get_logger(), "Client interrupted while waiting for service");
@@ -89,8 +116,14 @@ public:
   }
 
 private:
+  double STEP_VEL;
+  double STEP_ANGULAR;
   double MAX_VEL;
   double MAX_ANGULAR;
+  double MIN_VEL;
+  double MIN_ANGULAR;
+  double vel_;
+  double angular_;
   std::string AUTO_CMD_VEL_TOPIC;
   std::string CMD_VEL_TOPIC;
   // Controller controller_;
@@ -102,6 +135,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
   // client
   rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr ems_srv_;
+  rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr reset_srv_;
   // twists
   std::vector<geometry_msgs::msg::Twist> twists_;
   bool push_button() {}
@@ -118,6 +152,20 @@ private:
     auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
     request->data = data;
     auto result = ems_srv_->async_send_request(
+      request, [&](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future) {
+        RCLCPP_INFO(this->get_logger(), "%s", future.get()->message.c_str());
+      });
+  }
+
+  void reset()
+  {
+    if (!reset_srv_->wait_for_service(1s)) {
+      RCLCPP_INFO(this->get_logger(), "waiting for service...");
+      return;
+    }
+    auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
+    request->data = true;
+    auto result = reset_srv_->async_send_request(
       request, [&](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future) {
         RCLCPP_INFO(this->get_logger(), "%s", future.get()->message.c_str());
       });

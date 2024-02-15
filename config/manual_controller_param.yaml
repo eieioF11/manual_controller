@@ -5,6 +5,16 @@ manual_controller_node:
         cmd_vel: "manual/cmd_vel"
         auto_cmd_vel: "auto/cmd_vel"
         joy: "/joy"
+      service_name:
+        reset: "mpc_path_planning/reset"
+      step:
+        vel: 0.1 #[m/s]
+        angular: 0.1 #[rad/s]
+      min:
+        vel: 0.1 #[m/s]
+        angular: 0.5 #[rad/s]
       max:
-        vel: 0.7 #[m/s]
-        angular: 1.0 #[rad/s]
+        vel: 1.0 #[m/s]
+        angular: 2.0 #[rad/s]
+      type: "logi_xbox" # "steamdeck" or "logi_xbox"
+      threshold: 0.2
