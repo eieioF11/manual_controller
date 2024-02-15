@@ -124,11 +124,11 @@ public:
 private:
   enum class Axis_Map {
     LEFT_X,
-    LEFT_Y,
-    LEFT_TRIGGER,
+    LEFT_Y, 
     RIGHT_X,
-    RIGHT_Y,
+    LEFT_TRIGGER,
     RIGHT_TRIGGER,
+    RIGHT_Y,
     LEFT_RIGHT,
     UP_DOWN,
     NONE,
