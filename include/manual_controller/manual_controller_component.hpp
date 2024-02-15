@@ -16,6 +16,7 @@
 #include "controller/controller.hpp"
 #include "controller/logi_xbox.hpp"
 #include "controller/steamdeck.hpp"
+#include "controller/ps4.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -47,6 +48,8 @@ public:
       controller_ = std::make_shared<LogiXboxController>(threshold);
     else if (controller_type == "steamdeck")
       controller_ = std::make_shared<SteamDeckController>(threshold);
+    else if (controller_type == "ps4")
+      controller_ = std::make_shared<PS4Controller>(threshold);
     else
       controller_ = std::make_shared<LogiXboxController>(threshold);
     vel_ = MIN_VEL;
@@ -94,6 +97,10 @@ public:
             angular_+=STEP_ANGULAR;
           if (controller_->get_key_down(Controller::Key::RIGHT))
             angular_-=STEP_ANGULAR;
+          if(vel_ > MAX_VEL) vel_ = MAX_VEL;
+          if(vel_ < MIN_VEL) vel_ = MIN_VEL;
+          if(angular_ > MAX_ANGULAR) angular_ = MAX_ANGULAR;
+          if(angular_ < MIN_ANGULAR) angular_ = MIN_ANGULAR;
           RCLCPP_INFO(this->get_logger(), "vel: %f angular: %f", vel_, angular_);
         } else {
           if (!controller_->get_axis(Controller::Axis::LEFT_Y))
