@@ -24,6 +24,7 @@ ament_auto_add_executable(${PROJECT_NAME} src/main.cpp)
 install(DIRECTORY
   config
   launch
+  rviz
   DESTINATION share/${PROJECT_NAME}/
 )
 

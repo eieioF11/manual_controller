@@ -52,6 +52,7 @@ public:
       controller_ = std::make_shared<PS4Controller>(threshold);
     else
       controller_ = std::make_shared<LogiXboxController>(threshold);
+    RCLCPP_INFO(this->get_logger(), "%s", controller_type.c_str());
     vel_ = MIN_VEL;
     angular_ = MIN_ANGULAR;
     // publisher

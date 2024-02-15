@@ -44,9 +44,9 @@ public:
           return get_axis(Axis::RIGHT_Y) < -threshold_;
         // trigger
         case Key::L2:
-          return get_axis(Axis::LEFT_RIGHT) > threshold_;
+          return get_axis(Axis::LEFT_TRIGGER) < -threshold_;
         case Key::R2:
-          return get_axis(Axis::RIGHT_TRIGGER) > threshold_;
+          return get_axis(Axis::RIGHT_TRIGGER) < -threshold_;
         default:
           return false;
       }
@@ -85,7 +85,7 @@ public:
           return get_trigger_down_f(static_cast<size_t>(Axis_Map::RIGHT_Y),-threshold_);
         // trigger
         case Key::L2:
-          return  get_trigger_down_f(static_cast<size_t>(Axis_Map::LEFT_RIGHT),threshold_);
+          return  get_trigger_down_f(static_cast<size_t>(Axis_Map::LEFT_TRIGGER),threshold_);
         case Key::R2:
           return get_trigger_down_f(static_cast<size_t>(Axis_Map::RIGHT_TRIGGER),threshold_);
         default:
@@ -126,7 +126,7 @@ public:
           return get_trigger_up_f(static_cast<size_t>(Axis_Map::RIGHT_Y),-threshold_);
         // trigger
         case Key::L2:
-          return  get_trigger_up_f(static_cast<size_t>(Axis_Map::LEFT_RIGHT),threshold_);
+          return  get_trigger_up_f(static_cast<size_t>(Axis_Map::LEFT_TRIGGER),threshold_);
         case Key::R2:
           return get_trigger_up_f(static_cast<size_t>(Axis_Map::RIGHT_TRIGGER),threshold_);
         default:
