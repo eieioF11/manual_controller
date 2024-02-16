@@ -135,10 +135,10 @@ private:
     KEY,
   };
   enum class Key_Map {
+    X,
     A,
     B,
     Y,
-    X,
     L1,
     R1,
     L2,
