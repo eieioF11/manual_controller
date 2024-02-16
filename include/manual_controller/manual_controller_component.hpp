@@ -146,7 +146,6 @@ private:
   rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr reset_srv_;
   // twists
   std::vector<geometry_msgs::msg::Twist> twists_;
-  bool push_button() {}
 
   void publish_switch(const std::string & name)
   {
