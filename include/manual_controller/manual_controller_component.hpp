@@ -12,12 +12,16 @@
 #include <sensor_msgs/msg/joy.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <ros2_unitree_legged_msgs/msg/high_cmd.hpp>
 
 #include "controller/controller.hpp"
 #include "controller/logi_xbox.hpp"
 #include "controller/steamdeck.hpp"
 #include "controller/ps4.hpp"
 
+#include "common_lib/common_lib.hpp"
+
+using namespace common_lib;
 using std::placeholders::_1;
 using namespace std::chrono_literals;
 
@@ -60,6 +64,8 @@ public:
       this->create_publisher<geometry_msgs::msg::Twist>(CMD_VEL_TOPIC, rclcpp::QoS(10));
     switch_pub_ =
       this->create_publisher<std_msgs::msg::String>("twist_bridge/switch", rclcpp::QoS(10));
+    high_cmd_pub_ =
+      this->create_publisher<ros2_unitree_legged_msgs::msg::HighCmd>("/high_cmd", rclcpp::QoS(1));
     // subscriber
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
       JOY_TOPIC, rclcpp::QoS(10), [&](const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -88,6 +94,9 @@ public:
           cmd_vel.angular.z = angular_;
         } else if (controller_->get_key(Controller::Key::R1)) {
           cmd_vel.angular.z = -angular_;
+        }
+        if (controller_->get_key_down(Controller::Key::R2)) {
+          tilt(unit_cast<unit::angle::rad>(-40.0));
         }
         if (controller_->get_key(Controller::Key::L2)) {
           if (controller_->get_key_down(Controller::Key::UP))
@@ -139,6 +148,7 @@ private:
   // publisher
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr switch_pub_;
+  rclcpp::Publisher<ros2_unitree_legged_msgs::msg::HighCmd>::SharedPtr high_cmd_pub_;
   // subscriber
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
   // client
@@ -146,7 +156,19 @@ private:
   rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr reset_srv_;
   // twists
   std::vector<geometry_msgs::msg::Twist> twists_;
-  bool push_button() {}
+
+  void tilt(double rad)
+  {
+    ros2_unitree_legged_msgs::msg::HighCmd msg;
+    msg.head[0] = 0xFE;
+    msg.head[1] = 0xEF;
+    msg.mode = 1;
+    msg.euler[0] = 0.0;
+    msg.euler[1] = rad;
+    msg.euler[2] = 0.0;
+    high_cmd_pub_->publish(msg);
+  }
+
 
   void publish_switch(const std::string & name)
   {
