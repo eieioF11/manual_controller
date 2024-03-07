@@ -12,6 +12,9 @@
 #include <sensor_msgs/msg/joy.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+// jsr_rviz_plugin_msgs
+#include <jsk_rviz_plugin_msgs/msg/overlay_menu.hpp>
+#include <jsk_rviz_plugin_msgs/msg/pictogram.hpp>
 
 #include "controller/controller.hpp"
 #include "controller/logi_xbox.hpp"
@@ -55,11 +58,16 @@ public:
     RCLCPP_INFO(this->get_logger(), "%s", controller_type.c_str());
     vel_ = MIN_VEL;
     angular_ = MIN_ANGULAR;
+    latest_mode_=0;
+    switch_mode_ = make_overlay_menu(
+      "mode", {"auto", "manual", "ems on"}, 0);
     // publisher
     cmd_vel_pub_ =
       this->create_publisher<geometry_msgs::msg::Twist>(CMD_VEL_TOPIC, rclcpp::QoS(10));
     switch_pub_ =
       this->create_publisher<std_msgs::msg::String>("twist_bridge/switch", rclcpp::QoS(10));
+    switch_mode_pub_ = create_publisher<jsk_rviz_plugin_msgs::msg::OverlayMenu>(
+      "switch_mode", rclcpp::QoS(10));
     // subscriber
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
       JOY_TOPIC, rclcpp::QoS(10), [&](const sensor_msgs::msg::Joy::SharedPtr msg) {
@@ -70,15 +78,21 @@ public:
         cmd_vel.angular.z = controller_->get_axis(Controller::Axis::RIGHT_X) * MAX_ANGULAR;
 
         if (controller_->get_key_down(Controller::Key::A)) {
+          switch_mode_.current_index = 0;
           publish_switch(AUTO_CMD_VEL_TOPIC);
         }
         if (controller_->get_key_down(Controller::Key::B)) {
+          switch_mode_.current_index = 1;
           publish_switch(CMD_VEL_TOPIC);
         }
         if (controller_->get_key_down(Controller::Key::X)) {
+          
+          latest_mode_ = switch_mode_.current_index;
+          switch_mode_.current_index = 2;
           ems(true);
         }
         if (controller_->get_key_down(Controller::Key::Y)) {
+          switch_mode_.current_index = latest_mode_;
           ems(false);
         }
         if (controller_->get_key_down(Controller::Key::START)) {
@@ -110,6 +124,7 @@ public:
             cmd_vel.linear.y = controller_->get_axis(Controller::Axis::LEFT_RIGHT) * vel_;
         }
         cmd_vel_pub_->publish(cmd_vel);
+        switch_mode_pub_->publish(switch_mode_);
       });
     // client
     ems_srv_ = this->create_client<std_srvs::srv::SetBool>("twist_bridge/ems");
@@ -139,6 +154,7 @@ private:
   // publisher
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr switch_pub_;
+  rclcpp::Publisher<jsk_rviz_plugin_msgs::msg::OverlayMenu>::SharedPtr switch_mode_pub_;
   // subscriber
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
   // client
@@ -164,6 +180,18 @@ private:
       });
   }
 
+  int latest_mode_;
+  jsk_rviz_plugin_msgs::msg::OverlayMenu switch_mode_;
+  jsk_rviz_plugin_msgs::msg::OverlayMenu make_overlay_menu(std::string title, const std::vector<std::string>& menu_names, int index = 0,
+                                                                  int32_t action = jsk_rviz_plugin_msgs::msg::OverlayMenu::ACTION_SELECT) {
+    jsk_rviz_plugin_msgs::msg::OverlayMenu overlay_menu;
+    overlay_menu.action        = action;
+    overlay_menu.title         = title;
+    overlay_menu.menus         = menu_names;
+    overlay_menu.current_index = index;
+    return overlay_menu;
+  }
+
   void reset()
   {
     if (!reset_srv_->wait_for_service(1s)) {
@@ -175,6 +203,8 @@ private:
     auto result = reset_srv_->async_send_request(
       request, [&](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future) {
         RCLCPP_INFO(this->get_logger(), "%s", future.get()->message.c_str());
+        
+        switch_mode_.current_index = 0;
       });
   }
 

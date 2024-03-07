@@ -106,26 +106,13 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        base_link:
-          Value: true
-        imu_link:
-          Value: true
-        laser:
-          Value: true
-        odom:
-          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
       Tree:
-        odom:
-          base_link:
-            imu_link:
-              {}
-            laser:
-              {}
+        {}
       Update Interval: 0
       Value: true
     - Align Bottom: false
@@ -152,6 +139,25 @@ Visualization Manager:
       text size: 12
       top: 0
       width: 200
+    - Background Alpha: 0.5
+      Background Color: 0; 0; 0
+      Class: jsk_rviz_plugin/OverlayMenu
+      Enabled: true
+      Foreground Alpha: 1
+      Foreground Color: 25; 255; 240
+      Name: OverlayMenu
+      Overtake BG Color Properties: true
+      Overtake FG Color Properties: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /switch_mode
+      Value: true
+      keep centered: false
+      left: 0
+      top: 30
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -213,10 +219,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5503987073898315
+      Pitch: 0.4553985297679901
       Target Frame: base_link
       Value: Orbit (rviz)
-      Yaw: 2.0835773944854736
+      Yaw: 2.7485768795013428
     Saved: ~
 Window Geometry:
   Displays:
