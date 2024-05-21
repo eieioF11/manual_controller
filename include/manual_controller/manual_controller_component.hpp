@@ -58,9 +58,9 @@ public:
     RCLCPP_INFO(this->get_logger(), "%s", controller_type.c_str());
     vel_ = MIN_VEL;
     angular_ = MIN_ANGULAR;
-    latest_mode_=0;
     switch_mode_ = make_overlay_menu(
-      "mode", {"auto", "manual", "ems on"}, 0);
+      "mode", {"ems off", "ems on"}, 0);
+    switch_mode_.fg_color = make_color(0.0,0.0,0.2,0.2);
     // publisher
     cmd_vel_pub_ =
       this->create_publisher<geometry_msgs::msg::Twist>(CMD_VEL_TOPIC, rclcpp::QoS(10));
@@ -78,21 +78,16 @@ public:
         cmd_vel.angular.z = controller_->get_axis(Controller::Axis::RIGHT_X) * MAX_ANGULAR;
 
         if (controller_->get_key_down(Controller::Key::A)) {
-          switch_mode_.current_index = 0;
           publish_switch(AUTO_CMD_VEL_TOPIC);
         }
         if (controller_->get_key_down(Controller::Key::B)) {
-          switch_mode_.current_index = 1;
           publish_switch(CMD_VEL_TOPIC);
         }
         if (controller_->get_key_down(Controller::Key::X)) {
           
-          latest_mode_ = switch_mode_.current_index;
-          switch_mode_.current_index = 2;
           ems(true);
         }
         if (controller_->get_key_down(Controller::Key::Y)) {
-          switch_mode_.current_index = latest_mode_;
           ems(false);
         }
         if (controller_->get_key_down(Controller::Key::START)) {
@@ -172,6 +167,16 @@ private:
 
   void ems(const bool & data)
   {
+    if(data)
+    {
+      switch_mode_.bg_color = make_color(0.2,0.0,0.0,0.2);
+      switch_mode_.current_index = 1;
+    }
+    else
+    {
+      switch_mode_.bg_color = make_color(0.0,0.0,0.2,0.2);
+      switch_mode_.current_index = 0;
+    }
     auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
     request->data = data;
     auto result = ems_srv_->async_send_request(
@@ -180,7 +185,14 @@ private:
       });
   }
 
-  int latest_mode_;
+  std_msgs::msg::ColorRGBA make_color(double r,double g,double b,double a){
+    std_msgs::msg::ColorRGBA c;
+    c.a = a;
+    c.r = r;
+    c.g = g;
+    c.b = b;
+    return c;
+  }
   jsk_rviz_plugin_msgs::msg::OverlayMenu switch_mode_;
   jsk_rviz_plugin_msgs::msg::OverlayMenu make_overlay_menu(std::string title, const std::vector<std::string>& menu_names, int index = 0,
                                                                   int32_t action = jsk_rviz_plugin_msgs::msg::OverlayMenu::ACTION_SELECT) {
