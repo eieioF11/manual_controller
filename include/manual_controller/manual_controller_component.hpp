@@ -17,6 +17,7 @@
 #include "controller/logi_xbox.hpp"
 #include "controller/steamdeck.hpp"
 #include "controller/ps4.hpp"
+#include "controller/gamesir.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -50,6 +51,8 @@ public:
       controller_ = std::make_shared<SteamDeckController>(threshold);
     else if (controller_type == "ps4")
       controller_ = std::make_shared<PS4Controller>(threshold);
+    else if (controller_type == "gamesir")
+      controller_ = std::make_shared<GamesirController>(threshold);
     else
       controller_ = std::make_shared<LogiXboxController>(threshold);
     RCLCPP_INFO(this->get_logger(), "%s", controller_type.c_str());
